@@ -1,34 +1,47 @@
-#!/bin/bash
+#!/usr/bin/env oksh
 
 set -e
 
+first2 () {
+	echo "$1" | sed 's/^\(..\).*$/\1/'
+}
+
 add_file () {
-    local md5=$(libgen-test "$1")
-    if [[ -n $md5 ]]; then
-	mv -- "$1" "$BOOK_DIR/md5/${md5:0:2}/$md5"
+    local md5=$(libgen-test "$1") fn
+    if [[ -n $md5 ]]
+	then
+		fn="$BOOK_DIR/md5/$(first2 $md5)/$md5"
+		mv -- "$1" "$fn"
+		chmod 444 "$fn"
     else
-	echo "Can't add $1" >&2
+		echo "Can't add $1" >&2
     fi
 }
 
 main () {
-    if [[ -f $1 ]]; then
-	add_file "$1"
-    elif [[ -d $1 ]]; then
-	local f
-	IFS=$'\n'
-	ls -1 | while read f; do
-	    if [[ -f $f ]]; then
-		add_file "$f"
-	    fi
-	done
+	local f arg
+	arg="$1"
+	if [[ -L $arg ]]
+	then
+		arg="$(readlink "$arg")"
+	fi
+    if [[ -f $arg ]]
+	then
+		add_file "$1"
+    elif [[ -d $arg ]]
+	then
+		cd "$arg"
+		for f in *
+		do
+			[[ -f $f ]] && add_file "$f"
+		done
     else
-	echo "Bad argument: $1" >&2
-	exit 192
+		echo "Bad argument: $arg" >&2
+		exit 192
     fi
 }
 
-btrfs property set $BOOK_DIR ro false
+zfs set readonly=off zm/ak/books
 main "$1"
 index-books
-btrfs property set $BOOK_DIR ro true
+zfs set readonly=on zm/ak/books
